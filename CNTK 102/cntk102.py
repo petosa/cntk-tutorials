@@ -3,11 +3,12 @@ import numpy as np
 from matplotlib import pyplot as plt
 from math import pi
 from collections import defaultdict
+from common import predict, particles, get_color
 
 
 # GLOBALS
 num_features = 2
-num_classes = 3
+num_classes = 5
 
 # Helper function to generate a random data sample
 def data_gen(sample_size, feature_dim, num_classes):
@@ -23,12 +24,16 @@ def data_gen(sample_size, feature_dim, num_classes):
     return X, Y
 
 
+
+'''
+Manual Neural Network
+'''
 params = {}
-def linear_units(input_var, output_dim):
+def linear_layer(input_var, output_dim):
     input_dim = input_var.shape[0]
     # Introduce model parameters
-    weight_param = C.parameter(shape=(output_dim, input_dim), name="weights")
-    bias_param = C.parameter(shape=(output_dim, 1), name="biases")
+    weight_param = C.parameter(shape=(output_dim, input_dim), name="weights", init=C.glorot_uniform())
+    bias_param = C.parameter(shape=(output_dim, 1), name="biases", init=C.glorot_uniform())
     # Reshape to facilitate matrix multiplication
     input_reshaped = C.reshape(input_var, (input_dim, 1))
     # Weighted sums
@@ -37,12 +42,40 @@ def linear_units(input_var, output_dim):
     # Add biases
     part2 = part1 + bias_param
     # Return 1-D representation
-    return C.reshape(part2, (num_classes))
+    return C.reshape(part2, (output_dim))
+
+def dense_layer(input_var, output_dim, nonlinearity):
+    return nonlinearity(linear_layer(input_var, output_dim))
+
+def fully_connected_classifier_net(input_var, num_output_classes, hidden_layer_dim, num_hidden_layers, nonlinearity):
+    h = dense_layer(input_var, hidden_layer_dim, nonlinearity)
+    for i in range(1, num_hidden_layers):
+        h = dense_layer(h, hidden_layer_dim, nonlinearity)
+    return linear_layer(h, num_output_classes)
+
+
+'''
+Built-in Neural Network
+'''
+def create_model(features, num_hidden_layers, hidden_layer_dim):
+    with C.layers.default_options(init=C.glorot_uniform(), activation=C.sigmoid):
+        h = features
+        for _ in range(num_hidden_layers):
+            h = C.layers.Dense(hidden_layers_dim)(h)
+        last_layer = C.layers.Dense(num_classes, activation = None)
+        return last_layer(h)
+
 
 
 inputs = C.input_variable(shape=(num_features), dtype=np.float32, name="features")
 # Z is the model; a composition of operation. Maps [(input_dim) -> (num_classes)]
-z = linear_units(inputs, num_classes)
+num_hidden_layers = 2
+hidden_layers_dim = 10
+
+# Choose your model
+z = create_model(inputs, num_hidden_layers, hidden_layers_dim)
+z = fully_connected_classifier_net(inputs, num_classes, hidden_layers_dim, num_hidden_layers, C.sigmoid)
+
 print(z.parameters)
 label = C.input_variable(1, dtype=np.float32, name="label")
 onehot = C.one_hot(label, num_classes)
@@ -68,8 +101,8 @@ def print_training_progress(trainer, mb, frequency, verbose=1):
     return mb, training_loss, eval_error
 
 # Initialize the parameters for the trainer
-minibatch_size = 250
-num_samples_to_train = 50000
+minibatch_size = 500
+num_samples_to_train = 150000
 num_minibatches_to_train = int(num_samples_to_train / minibatch_size)
 
 # Run the trainer and perform model training
@@ -89,7 +122,6 @@ for i in range(0, num_minibatches_to_train):
         plotdata["error"].append(error)
 
 
-
 f, axarr = plt.subplots(2)
 axarr[0].plot(plotdata["batchsize"], plotdata["loss"], 'b--')
 axarr[0].set_xlabel('Minibatch number')
@@ -102,30 +134,24 @@ axarr[1].set_title('Training Error')
 f.tight_layout()
 plt.show()
 
-print("Optimal parameters")
-print(params["w"].value)
-print(params["b"].value)
-
-print("Displaying decision boundaries")
 
 # Get test data
 features, labels = data_gen(minibatch_size, num_features, num_classes)
-def get_color(label):
-    return plt.cm.get_cmap("hsv", num_classes + 1)(int(label))
-colors = [get_color(label[0]) for label in labels]
-plt.scatter(features[:,0], features[:,1], c=colors)
+print(trainer.test_minibatch({inputs: features, label: labels}))
+pred = predict(features, z, inputs)
+eq = pred == labels
+print("Error (1-acc):", 1.0 - float(sum(eq))/len(eq))
 
-# Draw decision boundaries
-final_weights = params["w"].value
-final_bias = params["b"].value
-# Draw a boundary for each class, since boundaries are "one vs all"
-for i in range(len(final_weights)):
-    c1 = final_weights[i][0]
-    c2 = final_weights[i][1]
-    b = final_bias[i]
-    # Solve for x2 in w1x1 + w2x2 + b = 0 (the boundary)
-    def solver(x):
-        return -c1/c2*x - b/c2
-    plt.plot([-3, 3], [solver(-3), solver(3)], color=get_color(i), linewidth=3, linestyle="--")
+acc_colors = [get_color(label[0], num_classes) for label in labels]
+pred_colors = [get_color(y[0], num_classes) for y in pred]
+plt.scatter(features[:,0], features[:,1], c=acc_colors, s=55)
+plt.scatter(features[:,0], features[:,1], c=pred_colors, marker="x")
+plt.show()
 
+# Visualize boundaries
+print("Displaying decision boundaries")
+plt.scatter(features[:,0], features[:,1], c=acc_colors, s=55)
+part, part_y = particles(500, 5, z, inputs, num_features)
+part_colors = [get_color(y[0], num_classes) for y in part_y]
+plt.scatter(part[:,0], part[:,1], c=part_colors, marker="x", alpha=0.5)
 plt.show()
