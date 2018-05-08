@@ -1,0 +1,19 @@
+Define a model with parameters (weights + biases). Optimizer adjusted the parameters.
+Input variable - user interface to the model. This would be the raw image data; the features. Also where you would provide labels during training/testing.
+
+Linear regression example:
+We want to optimize the weights of a linear unit for each class.
+So if we have N classes, we tune N linear units.
+A linear unit is simply the dot product of weight vector W and input vector X plus bias constant b.
+Since we need N linear units, we need to do this feedforward pass N times.
+But we can do a shortcut with matrix multiplication.
+Matrix multiplication LxR dots rows of L with columns of R.
+So make each row of L a weight vector for one of the linear units, and make R a vector of inputs.
+This finds the weighted sum of the inputs as a vector of size N (one weighted sum per unit).
+Next we need to apply the bias, so do N + B where B is a bias vector of size N (one bias per unit).
+The parameters we need to optimize are the weights and the biases.
+
+Linear decision boundaries are 1 vs all; therefore you must have a line for each class.
+Onehot encoding can be integrated into model as an operation.
+
+Labels cannot be a series, must be an Nx1 matrix when fed into model
